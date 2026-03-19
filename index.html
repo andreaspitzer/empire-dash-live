@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire Dash Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.8.0.1.min.js"></script>
+    <style>
+        /* ─── CSS Variables ─── */
+        :root {
+            --bg: #060a10;
+            --panel-bg: #0b0f18;
+            --panel-header: #0f1420;
+            --border: #1a2236;
+            --accent: #00e5ff;
+            --accent-dim: rgba(0, 229, 255, 0.1);
+            --accent-glow: rgba(0, 229, 255, 0.4);
+            --text: #dde4ed;
+            --text-dim: #546178;
+            --gold: #ffd700;
+            --silver: #b0bcc8;
+            --bronze: #cd7f32;
+            --danger: #ff3860;
+            --warning: #ffdd57;
+            --font-display: 'Orbitron', monospace;
+            --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --row-h: 52px;
+        }
+
+        /* ─── Reset & Base ─── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            overflow: hidden;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 24px;
+            background: var(--panel-header);
+            border-top: 3px solid var(--accent);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+            z-index: 10;
+        }
+        .header h1 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: var(--accent);
+            text-shadow: 0 0 24px var(--accent-glow), 0 0 48px rgba(0, 229, 255, 0.15);
+        }
+
+        /* ─── Status Indicator ─── */
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            transition: background 300ms, box-shadow 300ms;
+        }
+        .status-dot.live {
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent), 0 0 14px var(--accent-glow);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .status-dot.waiting {
+            background: var(--warning);
+            box-shadow: 0 0 6px rgba(255, 221, 87, 0.5);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        .status-dot.disconnected {
+            background: var(--danger);
+            box-shadow: 0 0 6px rgba(255, 56, 96, 0.5);
+        }
+        .status-label {
+            font-family: var(--font-display);
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        /* ─── Layout ─── */
+        .main {
+            display: flex;
+            flex-direction: row;
+            flex: 1;
+            overflow: hidden;
+        }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .panel-left {
+            border-right: 1px solid var(--border);
+        }
+        .panel-header {
+            flex-shrink: 0;
+            padding: 16px 20px 12px;
+            background: var(--panel-header);
+            border-bottom: 1px solid var(--border);
+        }
+        .panel-header h2 {
+            font-family: var(--font-display);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            color: var(--text);
+            margin-bottom: 3px;
+        }
+        .panel-sub {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.3px;
+        }
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--panel-bg);
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── Leaderboard ─── */
+        .lb-row {
+            display: flex;
+            align-items: center;
+            padding: 11px 20px;
+            gap: 14px;
+            border-bottom: 1px solid rgba(26, 34, 54, 0.5);
+            transition: background 200ms;
+        }
+        .lb-row:hover { background: rgba(255, 255, 255, 0.02); }
+        .lb-rank {
+            font-family: var(--font-display);
+            font-size: 0.78rem;
+            font-weight: 700;
+            width: 40px;
+            text-align: center;
+            flex-shrink: 0;
+            color: var(--text-dim);
+        }
+        .lb-rank.rank-1 {
+            color: var(--gold);
+            text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+        }
+        .lb-rank.rank-2 { color: var(--silver); }
+        .lb-rank.rank-3 {
+            color: var(--bronze);
+            text-shadow: 0 0 8px rgba(205, 127, 50, 0.3);
+        }
+        .lb-name {
+            flex: 1;
+            font-weight: 500;
+            font-size: 0.88rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .lb-score {
+            font-family: var(--font-display);
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        /* ─── Live Runners ─── */
+        .runners-wrap {
+            position: relative;
+            width: 100%;
+        }
+        .runner-row {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: var(--row-h);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+            border-bottom: 1px solid rgba(26, 34, 54, 0.35);
+            transition: transform 150ms ease-out, opacity 300ms ease;
+            will-change: transform, opacity;
+        }
+        .runner-state {
+            font-size: 1.05rem;
+            width: 26px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .runner-name {
+            flex: 1;
+            font-weight: 600;
+            font-size: 0.88rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .runner-dist {
+            font-family: var(--font-display);
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+        .runner-meta {
+            display: flex;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+        .runner-speed, .runner-score-val {
+            font-family: var(--font-display);
+            font-size: 0.68rem;
+            font-weight: 400;
+            color: var(--text-dim);
+        }
+
+        /* ─── Animations ─── */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+        @keyframes death-flash {
+            0%   { background: rgba(255, 56, 96, 0.55); }
+            100% { background: transparent; }
+        }
+        .runner-row.death {
+            animation: death-flash 1s ease-out;
+        }
+
+        /* ─── Empty States ─── */
+        .empty-state {
+            padding: 48px 20px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.82rem;
+            letter-spacing: 0.5px;
+        }
+        #runners-empty {
+            display: none;
+            flex: 1;
+            width: 100%;
+            padding: 0 32px;
+            box-sizing: border-box;
+        }
+
+        /* ─── Invite / QR ─── */
+        .invite {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+        }
+        .invite-heading {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--text);
+            transition: opacity 400ms ease;
+            line-height: 1.2;
+            text-align: center;
+        }
+        .invite-sub {
+            font-size: 1.15rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+            max-width: 600px;
+            text-align: center;
+            transition: opacity 400ms ease;
+        }
+        .invite-heading.fade, .invite-sub.fade {
+            opacity: 0;
+        }
+        /* ─── Fixed QR Badge ─── */
+        .qr-badge {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            transform: rotate(-5deg);
+            animation: qr-pulse 3s ease-in-out infinite;
+            pointer-events: auto;
+        }
+        @keyframes qr-pulse {
+            0%, 100% { opacity: 0.85; transform: rotate(-5deg) scale(1); }
+            50%      { opacity: 1;    transform: rotate(-5deg) scale(1.06); }
+        }
+        .qr-badge-code {
+            width: 180px;
+            height: 180px;
+            border-radius: 16px;
+            background: #fff;
+            padding: 10px;
+            border: 2px solid var(--border);
+            box-shadow: 0 0 30px rgba(0, 229, 255, 0.14);
+            display: block;
+            text-decoration: none;
+        }
+        .qr-badge-code img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+        }
+        .qr-badge-label {
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: var(--accent);
+            text-decoration: none;
+            text-shadow: 0 0 12px var(--accent-glow);
+        }
+        @media (max-width: 767px) {
+            .qr-badge { bottom: 14px; right: 14px; gap: 8px; }
+            .qr-badge-code { width: 100px; height: 100px; }
+            .qr-badge-label { font-size: 0.58rem; }
+        }
+
+        /* ─── Scrollbar ─── */
+        .panel-body::-webkit-scrollbar { width: 5px; }
+        .panel-body::-webkit-scrollbar-track { background: transparent; }
+        .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .panel-body { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 767px) {
+            .main { flex-direction: column; }
+            .panel-left {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                max-height: 42vh;
+            }
+            .header h1 { font-size: 0.95rem; letter-spacing: 2px; }
+            .header { padding: 12px 16px; }
+            .panel-header { padding: 12px 16px 10px; }
+            .lb-row { padding: 10px 16px; }
+            .runner-row { padding: 0 16px; }
+            .runner-meta { gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <h1>EMPIRE DASH LIVE</h1>
+    <div class="status">
+        <span class="status-dot waiting" id="status-dot"></span>
+        <span class="status-label" id="status-label">WAITING</span>
+    </div>
+</header>
+
+<main class="main" id="main">
+    <section class="panel panel-left">
+        <div class="panel-header">
+            <h2>LEADERBOARD</h2>
+            <span class="panel-sub">All-time best scores</span>
+        </div>
+        <div class="panel-body" id="leaderboard">
+            <div class="empty-state" id="lb-empty">No scores yet</div>
+        </div>
+    </section>
+    <section class="panel panel-right">
+        <div class="panel-header">
+            <h2>LIVE RUNNERS</h2>
+            <span class="panel-sub" id="runner-count">0 runners active</span>
+        </div>
+        <div class="panel-body" id="runners-scroll">
+            <div class="runners-wrap" id="runners-wrap"></div>
+            <div class="empty-state" id="runners-empty">
+                <div class="invite">
+                    <span class="invite-heading" id="invite-heading">NO RUNNERS YET</span>
+                    <p class="invite-sub" id="invite-sub">Be the first to play! Scan the code or tap below.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<div class="qr-badge">
+    <a href="https://empiredash.live" target="_blank" class="qr-badge-code">
+        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0nMS4wJyBlbmNvZGluZz0nVVRGLTgnPz4KPHN2ZyB3aWR0aD0iMjltbSIgaGVpZ2h0PSIyOW1tIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyOSAyOSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMiwySDNWM0gyek0zLDJINFYzSDN6TTQsMkg1VjNINHpNNSwySDZWM0g1ek02LDJIN1YzSDZ6TTcsMkg4VjNIN3pNOCwySDlWM0g4ek0xMCwySDExVjNIMTB6TTExLDJIMTJWM0gxMXpNMTIsMkgxM1YzSDEyek0xNCwySDE1VjNIMTR6TTE2LDJIMTdWM0gxNnpNMjAsMkgyMVYzSDIwek0yMSwySDIyVjNIMjF6TTIyLDJIMjNWM0gyMnpNMjMsMkgyNFYzSDIzek0yNCwySDI1VjNIMjR6TTI1LDJIMjZWM0gyNXpNMjYsMkgyN1YzSDI2ek0yLDNIM1Y0SDJ6TTgsM0g5VjRIOHpNMTAsM0gxMVY0SDEwek0xMiwzSDEzVjRIMTJ6TTE0LDNIMTVWNEgxNHpNMTUsM0gxNlY0SDE1ek0xNiwzSDE3VjRIMTZ6TTE4LDNIMTlWNEgxOHpNMjAsM0gyMVY0SDIwek0yNiwzSDI3VjRIMjZ6TTIsNEgzVjVIMnpNNCw0SDVWNUg0ek01LDRINlY1SDV6TTYsNEg3VjVINnpNOCw0SDlWNUg4ek0xMCw0SDExVjVIMTB6TTEyLDRIMTNWNUgxMnpNMTMsNEgxNFY1SDEzek0xNCw0SDE1VjVIMTR6TTE1LDRIMTZWNUgxNXpNMTgsNEgxOVY1SDE4ek0yMCw0SDIxVjVIMjB6TTIyLDRIMjNWNUgyMnpNMjMsNEgyNFY1SDIzek0yNCw0SDI1VjVIMjR6TTI2LDRIMjdWNUgyNnpNMiw1SDNWNkgyek00LDVINVY2SDR6TTUsNUg2VjZINXpNNiw1SDdWNkg2ek04LDVIOVY2SDh6TTE1LDVIMTZWNkgxNXpNMTYsNUgxN1Y2SDE2ek0yMCw1SDIxVjZIMjB6TTIyLDVIMjNWNkgyMnpNMjMsNUgyNFY2SDIzek0yNCw1SDI1VjZIMjR6TTI2LDVIMjdWNkgyNnpNMiw2SDNWN0gyek00LDZINVY3SDR6TTUsNkg2VjdINXpNNiw2SDdWN0g2ek04LDZIOVY3SDh6TTEwLDZIMTFWN0gxMHpNMTIsNkgxM1Y3SDEyek0xMyw2SDE0VjdIMTN6TTE0LDZIMTVWN0gxNHpNMTUsNkgxNlY3SDE1ek0xNiw2SDE3VjdIMTZ6TTE4LDZIMTlWN0gxOHpNMjAsNkgyMVY3SDIwek0yMiw2SDIzVjdIMjJ6TTIzLDZIMjRWN0gyM3pNMjQsNkgyNVY3SDI0ek0yNiw2SDI3VjdIMjZ6TTIsN0gzVjhIMnpNOCw3SDlWOEg4ek0xMSw3SDEyVjhIMTF6TTEzLDdIMTRWOEgxM3pNMTUsN0gxNlY4SDE1ek0xNiw3SDE3VjhIMTZ6TTIwLDdIMjFWOEgyMHpNMjYsN0gyN1Y4SDI2ek0yLDhIM1Y5SDJ6TTMsOEg0VjlIM3pNNCw4SDVWOUg0ek01LDhINlY5SDV6TTYsOEg3VjlINnpNNyw4SDhWOUg3ek04LDhIOVY5SDh6TTEwLDhIMTFWOUgxMHpNMTIsOEgxM1Y5SDEyek0xNCw4SDE1VjlIMTR6TTE2LDhIMTdWOUgxNnpNMTgsOEgxOVY5SDE4ek0yMCw4SDIxVjlIMjB6TTIxLDhIMjJWOUgyMXpNMjIsOEgyM1Y5SDIyek0yMyw4SDI0VjlIMjN6TTI0LDhIMjVWOUgyNHpNMjUsOEgyNlY5SDI1ek0yNiw4SDI3VjlIMjZ6TTExLDlIMTJWMTBIMTF6TTEyLDlIMTNWMTBIMTJ6TTEzLDlIMTRWMTBIMTN6TTE1LDlIMTZWMTBIMTV6TTE2LDlIMTdWMTBIMTZ6TTIsMTBIM1YxMUgyek01LDEwSDZWMTFINXpNNiwxMEg3VjExSDZ6TTcsMTBIOFYxMUg3ek04LDEwSDlWMTFIOHpNOSwxMEgxMFYxMUg5ek0xMCwxMEgxMVYxMUgxMHpNMTEsMTBIMTJWMTFIMTF6TTEyLDEwSDEzVjExSDEyek0xNiwxMEgxN1YxMUgxNnpNMTcsMTBIMThWMTFIMTd6TTE4LDEwSDE5VjExSDE4ek0xOSwxMEgyMFYxMUgxOXpNMjIsMTBIMjNWMTFIMjJ6TTI0LDEwSDI1VjExSDI0ek0yNSwxMEgyNlYxMUgyNXpNMjYsMTBIMjdWMTFIMjZ6TTIsMTFIM1YxMkgyek0zLDExSDRWMTJIM3pNNSwxMUg2VjEySDV6TTcsMTFIOFYxMkg3ek05LDExSDEwVjEySDl6TTEwLDExSDExVjEySDEwek0xMSwxMUgxMlYxMkgxMXpNMTQsMTFIMTVWMTJIMTR6TTE1LDExSDE2VjEySDE1ek0xNiwxMUgxN1YxMkgxNnpNMTcsMTFIMThWMTJIMTd6TTIxLDExSDIyVjEySDIxek0yMiwxMUgyM1YxMkgyMnpNMjMsMTFIMjRWMTJIMjN6TTI0LDExSDI1VjEySDI0ek0yNSwxMUgyNlYxMkgyNXpNMiwxMkgzVjEzSDJ6TTMsMTJINFYxM0gzek00LDEySDVWMTNINHpNNSwxMkg2VjEzSDV6TTYsMTJIN1YxM0g2ek03LDEySDhWMTNIN3pNOCwxMkg5VjEzSDh6TTEzLDEySDE0VjEzSDEzek0xNywxMkgxOFYxM0gxN3pNMjEsMTJIMjJWMTNIMjF6TTIyLDEySDIzVjEzSDIyek0yMywxMkgyNFYxM0gyM3pNMjYsMTJIMjdWMTNIMjZ6TTUsMTNINlYxNEg1ek03LDEzSDhWMTRIN3pNMTAsMTNIMTFWMTRIMTB6TTExLDEzSDEyVjE0SDExek0xNCwxM0gxNVYxNEgxNHpNMjAsMTNIMjFWMTRIMjB6TTIxLDEzSDIyVjE0SDIxek0yMywxM0gyNFYxNEgyM3pNMjQsMTNIMjVWMTRIMjR6TTI1LDEzSDI2VjE0SDI1ek0yNiwxM0gyN1YxNEgyNnpNNCwxNEg1VjE1SDR6TTYsMTRIN1YxNUg2ek04LDE0SDlWMTVIOHpNOSwxNEgxMFYxNUg5ek0xMSwxNEgxMlYxNUgxMXpNMTIsMTRIMTNWMTVIMTJ6TTEzLDE0SDE0VjE1SDEzek0xNCwxNEgxNVYxNUgxNHpNMTcsMTRIMThWMTVIMTd6TTE4LDE0SDE5VjE1SDE4ek0yMCwxNEgyMVYxNUgyMHpNMjEsMTRIMjJWMTVIMjF6TTI2LDE0SDI3VjE1SDI2ek0yLDE1SDNWMTZIMnpNMywxNUg0VjE2SDN6TTYsMTVIN1YxNkg2ek03LDE1SDhWMTZIN3pNMTEsMTVIMTJWMTZIMTF6TTE2LDE1SDE3VjE2SDE2ek0xNywxNUgxOFYxNkgxN3pNMTgsMTVIMTlWMTZIMTh6TTE5LDE1SDIwVjE2SDE5ek0yMiwxNUgyM1YxNkgyMnpNMjUsMTVIMjZWMTZIMjV6TTIsMTZIM1YxN0gyek0zLDE2SDRWMTdIM3pNNSwxNkg2VjE3SDV6TTYsMTZIN1YxN0g2ek03LDE2SDhWMTdIN3pNOCwxNkg5VjE3SDh6TTEwLDE2SDExVjE3SDEwek0xMywxNkgxNFYxN0gxM3pNMTQsMTZIMTVWMTdIMTR6TTE1LDE2SDE2VjE3SDE1ek0xNywxNkgxOFYxN0gxN3pNMjAsMTZIMjFWMTdIMjB6TTIyLDE2SDIzVjE3SDIyek0yMywxNkgyNFYxN0gyM3pNMjQsMTZIMjVWMTdIMjR6TTI1LDE2SDI2VjE3SDI1ek0yNiwxNkgyN1YxN0gyNnpNMiwxN0gzVjE4SDJ6TTQsMTdINVYxOEg0ek02LDE3SDdWMThINnpNMTEsMTdIMTJWMThIMTF6TTEzLDE3SDE0VjE4SDEzek0yMCwxN0gyMVYxOEgyMHpNMjEsMTdIMjJWMThIMjF6TTIzLDE3SDI0VjE4SDIzek0yNCwxN0gyNVYxOEgyNHpNMjYsMTdIMjdWMThIMjZ6TTIsMThIM1YxOUgyek00LDE0SDVWMTlINHpNNywxOEg4VjE5SDd6TTgsMThIOVYxOUg4ek0xMCwxOEgxMVYxOUgxMHpNMTEsMThIMTJWMTlIMTF6TTEyLDE4SDEzVjE5SDEyek0xNSwxOEgxNlYxOUgxNXpNMTcsMThIMThWMTlIMTd6TTE4LDE0SDE5VjE5SDE4ek0xOSwxOEgyMFYxOUgxOXpNMjAsMThIMjFWMTlIMjB6TTIxLDE4SDIyVjE5SDIxek0yMiwxOEgyM1YxOUgyMnpNMjQsMThIMjVWMTlIMjR6TTI1LDE4SDI2VjE5SDI1ek0xMCwxOUgxMVYyMEgxMHpNMTEsMTlIMTJWMjBIMTF6TTEzLDE5SDE0VjIwSDEzek0xNCwxOUgxNVYyMEgxNHpNMTYsMTlIMTdWMjBIMTZ6TTE4LDE5SDE5VjIwSDE4ek0yMiwxOUgyM1YyMEgyMnpNMjQsMTlIMjVWMjBIMjR6TTI1LDE5SDI2VjIwSDI1ek0yLDIwSDNWMjFIMnpNMywyMEg0VjIxSDN6TTQsMjBINVYyMUg0ek01LDIwSDZWMjFINXpNNiwyMEg3VjIxSDZ6TTcsMjBIOFYyMUg3ek04LDIwSDlWMjFIOHpNMTAsMjBIMTFWMjFIMTB6TTExLDIwSDEyVjIxSDExek0xMywyMEgxNFYyMUgxM3pNMTgsMjBIMTlWMjFIMTh6TTIwLDIwSDIxVjIxSDIwek0yMiwyMEgyM1YyMUgyMnpNMjYsMjBIMjdWMjFIMjZ6TTIsMjFIM1YyMkgyek04LDIxSDlWMjJIOHpNMTAsMjFIMTFWMjJIMTB6TTE0LDIxSDE1VjIySDE0ek0xNSwyMUgxNlYyMkgxNXpNMTYsMjFIMTdWMjJIMTZ6TTE3LDIxSDE4VjIySDE3ek0xOCwyMUgxOVYyMkgxOHpNMjIsMjFIMjNWMjJIMjJ6TTI1LDIxSDI2VjIySDI1ek0yLDIySDNWMjNIMnpNNCwyMkg1VjIzSDR6TTUsMjJINlYyM0g1ek02LDIySDdWMjNINnpNOCwyMkg5VjIzSDh6TTEwLDIySDExVjIzSDEwek0xMSwyMkgxMlYyM0gxMXpNMTIsMjJIMTNWMjNIMTJ6TTE0LDIySDE1VjIzSDE0ek0xNiwyMkgxN1YyM0gxNnpNMTcsMjJIMThWMjNIMTd6TTE4LDIySDE5VjIzSDE4ek0xOSwyMkgyMFYyM0gxOXpNMjAsMjJIMjFWMjNIMjB6TTIxLDIySDIyVjIzSDIxek0yMiwyMkgyM1YyM0gyMnpNMjUsMjJIMjZWMjNIMjV6TTI2LDIySDI3VjIzSDI2ek0yLDIzSDNWMjRIMnpNNCwyM0g1VjI0SDR6TTUsMjNINlYyNEg1ek02LDIzSDdWMjRINnpNOCwyM0g5VjI0SDh6TTEwLDIzSDExVjI0SDEwek0xMiwyM0gxM1YyNEgxMnpNMTYsMjNIMTdWMjRIMTZ6TTE5LDIzSDIwVjI0SDE5ek0yMCwyM0gyMVYyNEgyMHpNMjUsMjNIMjZWMjRIMjV6TTI2LDIzSDI3VjI0SDI2ek0yLDI0SDNWMjVIMnpNNCwyNEg1VjI1SDR6TTUsMjRINlYyNUg1ek02LDI0SDdWMjVINnpNOCwyNEg5VjI1SDh6TTExLDI0SDEyVjI1SDExek0xNCwyNEgxNVYyNUgxNHpNMTcsMjRIMThWMjVIMTd6TTE5LDI0SDIwVjI1SDE5ek0yMiwyNEgyM1YyNUgyMnpNMjMsMjRIMjRWMjVIMjN6TTI0LDI0SDI1VjI1SDI0ek0yNSwyNEgyNlYyNUgyNXpNMjYsMjRIMjdWMjVIMjZ6TTIsMjVIM1YyNkgyek04LDI1SDlWMjZIOHpNMTEsMjVIMTJWMjZIMTF6TTEyLDI1SDEzVjI2SDEyek0xNiwyNUgxN1YyNkgxNnpNMTcsMjVIMThWMjZIMTd6TTE5LDI1SDIwVjI2SDE5ek0yMSwyNUgyMlYyNkgyMXpNMjIsMjVIMjNWMjZIMjJ6TTI0LDI1SDI1VjI2SDI0ek0yNSwyNUgyNlYyNkgyNXpNMjYsMjVIMjdWMjZIMjZ6TTIsMjZIM1YyN0gyek0zLDI2SDRWMjdIM3pNNCwyNkg1VjI3SDR6TTUsMjZINlYyN0g1ek02LDI2SDdWMjdINnpNNywyNkg4VjI3SDd6TTgsMjZIOVYyN0g4ek0xMCwyNkgxMVYyN0gxMHpNMTQsMjZIMTVWMjdIMTR6TTE1LDI2SDE2VjI3SDE1ek0xNiwyNkgxN1YyN0gxNnpNMTgsMjZIMTlWMjdIMTh6TTIwLDI2SDIxVjI3SDIwek0yMywyNkgyNFYyN0gyM3pNMjYsMjZIMjdWMjdIMjZ6IiBpZD0icXItcGF0aCIgZmlsbD0iIzAwMDAwMCIgZmlsbC1vcGFjaXR5PSIxIiBmaWxsLXJ1bGU9Im5vbnplcm8iIHN0cm9rZT0ibm9uZSIgLz48L3N2Zz4=" alt="QR empiredash.live">
+    </a>
+    <a href="https://empiredash.live" target="_blank" class="qr-badge-label">EMPIREDASH.LIVE</a>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIGURE YOUR PUBNUB SUBSCRIBE KEY HERE
+// ═══════════════════════════════════════════════
+const PUBNUB_SUBSCRIBE_KEY = 'sub-c-0d24fa85-e5a3-458c-b506-a7680195e41b';
+
+// ─── CONFIG ───
+const CHANNEL         = 'lane-runner';
+const STALE_MS        = 500;
+const REMOVE_MS       = 5000;
+const DEATH_REMOVE_MS = 3000;
+const DEATH_FADE_MS   = 2000;
+const RENDER_INTERVAL = 100;
+const ROW_HEIGHT      = 52;
+const LEADERBOARD_CAP = 100;
+
+// ─── STATE ───
+const AppState = Object.freeze({ WAITING: 'WAITING', CONNECTED: 'CONNECTED', DISCONNECTED: 'DISCONNECTED' });
+var appState       = AppState.WAITING;
+var runners        = new Map();
+var leaderboard    = [];
+var renderTimer    = null;
+var runnerEls      = new Map();
+var removingUuids  = new Set();
+var hasReceivedMsg = false;
+var lastMsgTime    = 0;
+
+// ─── DOM REFS ───
+var statusDot     = document.getElementById('status-dot');
+var statusLabel   = document.getElementById('status-label');
+var lbEl          = document.getElementById('leaderboard');
+var lbEmptyEl     = document.getElementById('lb-empty');
+var runnersWrap   = document.getElementById('runners-wrap');
+var runnersEmpty  = document.getElementById('runners-empty');
+var runnerCountEl = document.getElementById('runner-count');
+
+// ─── UUID (persisted in localStorage) ───
+function makeUuid() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+function getSpectatorUuid() {
+    var KEY = 'spectator-uuid';
+    var uuid = localStorage.getItem(KEY);
+    if (!uuid) {
+        uuid = 'spectator-' + makeUuid();
+        localStorage.setItem(KEY, uuid);
+    }
+    return uuid;
+}
+var spectatorUuid = getSpectatorUuid();
+
+// ─── PUBNUB CLIENT ───
+var pubnub = new PubNub({
+    subscribeKey: PUBNUB_SUBSCRIBE_KEY,
+    uuid: spectatorUuid
+});
+
+// ─── LISTENER ───
+pubnub.addListener({
+    status: function(s) {
+        
+        if (s.category === 'PNConnectedCategory') {
+            setAppState(AppState.CONNECTED);
+            startRenderLoop();
+        } else if (s.category === 'PNReconnectedCategory') {
+            setAppState(AppState.CONNECTED);
+        } else if (
+            s.category === 'PNNetworkDownCategory' ||
+            s.category === 'PNNetworkIssuesCategory' ||
+            s.category === 'PNTimeoutCategory' ||
+            s.category === 'PNUnexpectedDisconnectCategory'
+        ) {
+            setAppState(AppState.DISCONNECTED);
+        }
+    },
+    message: function(m) {
+        handleMessage(m);
+    }
+});
+
+// ─── HELPERS ───
+function escapeHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+function formatScore(n) { return Number(n).toLocaleString(); }
+function formatDist(d)  { return Number(d).toFixed(1) + ' m'; }
+
+var STATE_ICONS = { run: '🏃', jump: '⬆', duck: '⬇', lane_l: '◀', lane_r: '▶' };
+function stateIcon(s) { return STATE_ICONS[s] || '🏃'; }
+function isSpectator(uuid) { return typeof uuid === 'string' && uuid.startsWith('spectator-'); }
+
+// ─── UI STATE MANAGEMENT ───
+function setAppState(newState) {
+    if (appState === newState) return;
+    appState = newState;
+    statusDot.className = 'status-dot';
+    if (newState === AppState.CONNECTED) {
+        statusDot.classList.add('live');
+        statusLabel.textContent = 'LIVE';
+    } else if (newState === AppState.WAITING) {
+        statusDot.classList.add('waiting');
+        statusLabel.textContent = 'WAITING';
+    } else {
+        statusDot.classList.add('disconnected');
+        statusLabel.textContent = 'DISCONNECTED';
+    }
+}
+
+// ─── RENDER LOOP ───
+function startRenderLoop() {
+    if (renderTimer !== null) return;
+    renderTimer = setInterval(renderRunners, RENDER_INTERVAL);
+}
+
+// ─── MESSAGE ROUTER ───
+var MSG_TYPE_PLAYER_STATE = 6;
+var MSG_TYPE_PLAYER_DEATH = 7;
+var MSG_TYPE_SYNC_RESPONSE = 8;
+
+function unwrapPayload(raw) {
+    var outer;
+    try {
+        outer = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+    } catch (e) {
+        console.warn('[Spectator] Bad outer JSON:', e);
+        return null;
+    }
+    if (!outer) return null;
+
+    if (outer.payload !== undefined) {
+        var inner;
+        try {
+            inner = (typeof outer.payload === 'string') ? JSON.parse(outer.payload) : outer.payload;
+        } catch (e) {
+            console.warn('[Spectator] Bad payload JSON:', e);
+            return null;
+        }
+        inner._outerType = outer.type;
+        return inner;
+    }
+
+    return outer;
+}
+
+function handleMessage(event) {
+    var msg = unwrapPayload(event.message);
+    if (!msg) return;
+
+    lastMsgTime = Date.now();
+    if (!hasReceivedMsg) {
+        hasReceivedMsg = true;
+    }
+
+    var type = msg._outerType !== undefined ? msg._outerType : (msg.type || msg.Type);
+    if (type === undefined && msg.leaderboard) type = MSG_TYPE_SYNC_RESPONSE;
+
+    switch (type) {
+        case MSG_TYPE_PLAYER_STATE: handlePlayerState(msg);   break;
+        case MSG_TYPE_PLAYER_DEATH: handlePlayerDeath(msg);   break;
+        case MSG_TYPE_SYNC_RESPONSE: handleSyncResponse(msg); break;
+        case 'PlayerState':   handlePlayerState(msg);   break;
+        case 'PlayerDeath':   handlePlayerDeath(msg);   break;
+        case 'SyncResponse':  handleSyncResponse(msg);  break;
+    }
+}
+
+// ─── PLAYERSTATE HANDLER ───
+function handlePlayerState(msg) {
+    if (!msg.uuid || isSpectator(msg.uuid)) return;
+
+    var existing = runners.get(msg.uuid);
+    if (existing && msg.seq <= existing.seq) return;
+
+    runners.set(msg.uuid, {
+        uuid:        msg.uuid,
+        displayName: msg.displayName || msg.uuid,
+        lane:        msg.lane,
+        dist:        msg.dist || 0,
+        speed:       msg.speed || 0,
+        state:       msg.state || 'run',
+        score:       msg.score || 0,
+        seq:         msg.seq || 0,
+        lastSeen:    Date.now(),
+        isDead:      false,
+        deathTime:   null
+    });
+}
+
+// ─── PLAYERDEATH HANDLER ───
+function handlePlayerDeath(msg) {
+    if (isSpectator(msg.uuid)) return;
+
+    mergeLeaderboardEntry({
+        uuid:        msg.uuid,
+        displayName: msg.displayName || msg.uuid,
+        score:       msg.finalScore,
+        ts:          msg.ts || Date.now()
+    });
+    renderLeaderboard();
+
+    var runner = runners.get(msg.uuid);
+    if (runner) {
+        runner.isDead = true;
+        runner.deathTime = Date.now();
+        var el = runnerEls.get(msg.uuid);
+        if (el) el.classList.add('death');
+    }
+}
+
+// ─── SYNCRESPONSE HANDLER ───
+function handleSyncResponse(msg) {
+    if (!Array.isArray(msg.leaderboard)) return;
+
+    var changed = false;
+    for (var i = 0; i < msg.leaderboard.length; i++) {
+        if (mergeLeaderboardEntry(msg.leaderboard[i])) changed = true;
+    }
+    if (changed) renderLeaderboard();
+}
+
+// ─── LEADERBOARD STORE ───
+function mergeLeaderboardEntry(entry) {
+    if (!entry) return false;
+    var name = entry.displayName || entry.uuid;
+    if (!name) return false;
+
+    var idx = leaderboard.findIndex(function(e) { return e.displayName === name; });
+    if (idx !== -1) {
+        var existing = leaderboard[idx];
+        if (entry.score > existing.score) {
+            existing.uuid = entry.uuid || existing.uuid;
+            existing.score = entry.score;
+            existing.ts = entry.ts || existing.ts;
+        } else {
+            return false;
+        }
+    } else {
+        leaderboard.push({
+            uuid:        entry.uuid || name,
+            displayName: name,
+            score:       entry.score,
+            ts:          entry.ts || Date.now()
+        });
+    }
+
+    leaderboard.sort(function(a, b) {
+        return b.score - a.score || a.ts - b.ts;
+    });
+    if (leaderboard.length > LEADERBOARD_CAP) leaderboard.length = LEADERBOARD_CAP;
+    return true;
+}
+
+// ─── RUNNER TRACKER ───
+function cleanStaleRunners() {
+    var now = Date.now();
+    for (var entry of runners) {
+        var uuid = entry[0], r = entry[1];
+        if (now - r.lastSeen > REMOVE_MS) {
+            runners.delete(uuid);
+            continue;
+        }
+        if (r.isDead && r.deathTime && now - r.deathTime > DEATH_REMOVE_MS) {
+            runners.delete(uuid);
+        }
+    }
+}
+
+function getSortedRunners() {
+    return Array.from(runners.values())
+        .sort(function(a, b) { return b.dist - a.dist; });
+}
+
+// ─── UI: RENDER LEADERBOARD ───
+function renderLeaderboard() {
+    if (leaderboard.length === 0) {
+        lbEl.innerHTML = '';
+        lbEmptyEl.style.display = '';
+        lbEl.appendChild(lbEmptyEl);
+        return;
+    }
+    lbEmptyEl.style.display = 'none';
+
+    var html = '';
+    for (var i = 0; i < leaderboard.length; i++) {
+        var e = leaderboard[i];
+        var rank = i + 1;
+        var rc = rank <= 3 ? ' rank-' + rank : '';
+        html += '<div class="lb-row">'
+            + '<span class="lb-rank' + rc + '">#' + rank + '</span>'
+            + '<span class="lb-name">' + escapeHtml(e.displayName) + '</span>'
+            + '<span class="lb-score">' + formatScore(e.score) + '</span>'
+            + '</div>';
+    }
+    lbEl.innerHTML = html;
+}
+
+// ─── UI: RENDER RUNNERS (100 ms tick) ───
+function createRunnerEl(runner, yPos) {
+    var el = document.createElement('div');
+    el.className = 'runner-row';
+    el.dataset.uuid = runner.uuid;
+    el.style.transform = 'translateY(' + yPos + 'px)';
+    el.style.opacity = '0';
+
+    var ico = el.appendChild(document.createElement('span'));
+    ico.className = 'runner-state';
+    ico.textContent = stateIcon(runner.state);
+
+    var name = el.appendChild(document.createElement('span'));
+    name.className = 'runner-name';
+    name.textContent = runner.displayName;
+
+    var dist = el.appendChild(document.createElement('span'));
+    dist.className = 'runner-dist';
+    dist.textContent = formatDist(runner.dist);
+
+    var meta = el.appendChild(document.createElement('span'));
+    meta.className = 'runner-meta';
+
+    var spd = meta.appendChild(document.createElement('span'));
+    spd.className = 'runner-speed';
+    spd.textContent = runner.speed.toFixed(1) + ' m/s';
+
+    var sc = meta.appendChild(document.createElement('span'));
+    sc.className = 'runner-score-val';
+    sc.textContent = formatScore(runner.score);
+
+    el._r = { ico: ico, name: name, dist: dist, spd: spd, sc: sc };
+    return el;
+}
+
+function updateRunnerEl(el, runner) {
+    var r = el._r;
+    r.ico.textContent  = stateIcon(runner.state);
+    r.name.textContent = runner.displayName;
+    r.dist.textContent = formatDist(runner.dist);
+    r.spd.textContent  = runner.speed.toFixed(1) + ' m/s';
+    r.sc.textContent   = formatScore(runner.score);
+}
+
+function renderRunners() {
+    cleanStaleRunners();
+    var sorted = getSortedRunners();
+    var now = Date.now();
+    var seen = new Set();
+
+    for (var i = 0; i < sorted.length; i++) {
+        var runner = sorted[i];
+        seen.add(runner.uuid);
+        var yPos = i * ROW_HEIGHT;
+        var isStale = !runner.isDead && (now - runner.lastSeen > STALE_MS);
+
+        var el = runnerEls.get(runner.uuid);
+        if (el) {
+            updateRunnerEl(el, runner);
+            el.style.transform = 'translateY(' + yPos + 'px)';
+
+            if (runner.isDead) {
+                var elapsed = now - runner.deathTime;
+                el.style.opacity = elapsed > DEATH_FADE_MS ? '0' : '1';
+            } else {
+                el.style.opacity = isStale ? '0.5' : '1';
+                el.classList.remove('death');
+            }
+        } else if (!removingUuids.has(runner.uuid)) {
+            el = createRunnerEl(runner, yPos);
+            runnersWrap.appendChild(el);
+            runnerEls.set(runner.uuid, el);
+        }
+    }
+
+    for (var pair of runnerEls) {
+        var uuid = pair[0], elRef = pair[1];
+        if (!seen.has(uuid) && !removingUuids.has(uuid)) {
+            removingUuids.add(uuid);
+            elRef.style.opacity = '0';
+            (function(u, e) {
+                setTimeout(function() {
+                    if (e.parentNode) e.parentNode.removeChild(e);
+                    runnerEls.delete(u);
+                    removingUuids.delete(u);
+                }, 350);
+            })(uuid, elRef);
+        }
+    }
+
+    runnersWrap.style.height = (sorted.length * ROW_HEIGHT) + 'px';
+
+    var count = sorted.length;
+    runnerCountEl.textContent = count + ' runner' + (count !== 1 ? 's' : '') + ' active';
+    runnersEmpty.style.display = count === 0 ? 'flex' : 'none';
+
+    if (count === 0) { startInviteRotation(); }
+    else             { stopInviteRotation(); }
+}
+
+// ─── INVITE MESSAGE ROTATION ───
+var INVITE_MESSAGES = [
+    { h: 'THE TRACK IS EMPTY', s: 'This is YOUR moment. No competition. Pure glory.' },
+    { h: 'LEGENDS START HERE', s: 'Every world record began with someone scanning a QR code. Probably.' },
+    { h: 'ARE YOU FAST ENOUGH?', s: 'Spoiler: you definitely are. Get in here.' },
+    { h: 'ZERO RUNNERS?!', s: 'The leaderboard is BEGGING for your name.' },
+    { h: 'FREE REAL ESTATE', s: 'An open lane, zero obstacles conquered, infinite potential.' },
+    { h: 'THIS IS YOUR SIGN', s: 'The universe wants you to dash. Who are you to argue?' },
+    { h: 'HALL OF FAME AWAITS', s: 'Scan. Run. Become immortal. Simple.' },
+    { h: 'EMBARRASSINGLY EMPTY', s: 'Honestly this is getting awkward. Someone please run.' },
+    { h: 'WORLD RECORD OPEN', s: 'With zero runners, ANY score is a new record. Just saying.' },
+    { h: 'THE EMPIRE NEEDS YOU', s: 'Brave dashers wanted. No experience required. Just vibes.' },
+    { h: 'BOREDOM IS THE ENEMY', s: 'Defeat it with a 30-second endless run. Scan the code.' },
+    { h: 'GHOST TOWN ENERGY', s: 'Be the hero who turns this board from 0 to legendary.' },
+];
+var inviteIdx = Math.floor(Math.random() * INVITE_MESSAGES.length);
+var inviteHeadingEl = document.getElementById('invite-heading');
+var inviteSubEl     = document.getElementById('invite-sub');
+var inviteTimer     = null;
+
+function rotateInvite() {
+    inviteHeadingEl.classList.add('fade');
+    inviteSubEl.classList.add('fade');
+    setTimeout(function() {
+        inviteIdx = (inviteIdx + 1) % INVITE_MESSAGES.length;
+        inviteHeadingEl.textContent = INVITE_MESSAGES[inviteIdx].h;
+        inviteSubEl.textContent     = INVITE_MESSAGES[inviteIdx].s;
+        inviteHeadingEl.classList.remove('fade');
+        inviteSubEl.classList.remove('fade');
+    }, 420);
+}
+
+function startInviteRotation() {
+    if (inviteTimer) return;
+    inviteTimer = setInterval(rotateInvite, 4000);
+}
+function stopInviteRotation() {
+    if (inviteTimer) { clearInterval(inviteTimer); inviteTimer = null; }
+}
+
+// ─── INIT ───
+(function init() {
+    setAppState(AppState.WAITING);
+    renderLeaderboard();
+    var first = INVITE_MESSAGES[inviteIdx];
+    inviteHeadingEl.textContent = first.h;
+    inviteSubEl.textContent     = first.s;
+    startInviteRotation();
+    pubnub.subscribe({ channels: [CHANNEL] });
+})();
+</script>
+</body>
+</html>
