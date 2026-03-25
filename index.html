@@ -113,6 +113,7 @@
         }
         .panel-left {
             border-right: 1px solid var(--border);
+            position: relative;
         }
         .panel-header {
             flex-shrink: 0;
@@ -298,7 +299,7 @@
         .invite-heading.fade, .invite-sub.fade {
             opacity: 0;
         }
-        /* ─── Fixed QR Badge ─── */
+        /* ─── QR Badge (top left of screen) ─── */
         .qr-badge {
             position: fixed;
             top: 28px;
@@ -317,8 +318,8 @@
             50%      { opacity: 1;    transform: rotate(-5deg) scale(1.06); }
         }
         .qr-badge-code {
-            width: 180px;
-            height: 180px;
+            width: 220px;
+            height: 220px;
             border-radius: 16px;
             background: #fff;
             padding: 10px;
@@ -335,7 +336,7 @@
         }
         .qr-badge-label {
             font-family: var(--font-display);
-            font-size: 0.85rem;
+            font-size: 1.1rem;
             font-weight: 700;
             letter-spacing: 1.5px;
             color: var(--accent);
@@ -344,8 +345,8 @@
         }
         @media (max-width: 767px) {
             .qr-badge { top: 14px; left: 14px; gap: 8px; }
-            .qr-badge-code { width: 100px; height: 100px; }
-            .qr-badge-label { font-size: 0.58rem; }
+            .qr-badge-code { width: 140px; height: 140px; }
+            .qr-badge-label { font-size: 0.75rem; }
         }
 
         /* ─── Scrollbar ─── */
@@ -419,7 +420,7 @@
 // ═══════════════════════════════════════════════
 // CONFIGURE YOUR PUBNUB SUBSCRIBE KEY HERE
 // ═══════════════════════════════════════════════
-const PUBNUB_SUBSCRIBE_KEY = 'sub-c-0d24fa85-e5a3-458c-b506-a7680195e41b';
+const PUBNUB_SUBSCRIBE_KEY = 'sub-c-693d99a9-5af6-4157-a30a-aa61289889ae';
 
 // ─── CONFIG ───
 const CHANNEL         = 'lane-runner';
